@@ -1,0 +1,318 @@
+<html>
+<head>
+    <link rel="stylesheet" href="/styles.css">
+    <title>Machine Surveillance</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            background: url('/background.jpg') no-repeat center center fixed;
+            background-size: cover;
+        }
+        .flipped-horizontal {
+            transform: scaleX(-1);
+        }
+        .flipped-vertical {
+            transform: scaleY(-1);
+        }
+        .flipped-both {
+            transform: scaleX(-1) scaleY(-1);
+        }
+        .logo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 100px;
+        }
+        .cluster-selector {
+            position: relative;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .cards {
+            margin-top: 50px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .card {
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .timestamp {
+            position: relative;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px;
+            font-size: 0.9em;
+            border-radius: 3px;
+        }
+        .record-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .record-btn:hover {
+            background-color: #45a049;
+        }
+        .buttons {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .buttons button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+        }
+        .buttons button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <img src="/logo.png" alt="Logo" class="logo">
+    <h1>Camera Dashboard</h1>
+    <div class="cluster-selector">
+        <button onclick="showCluster('cncMachine')" style="font-size: 1.5em; padding: 10px 20px;">CNC Machine</button>
+        <button onclick="showCluster('millingMachine')" style="font-size: 1.5em; padding: 10px 20px;">Machinist WorkStation</button>
+    </div>
+    <div class="cards" id="camera-container">
+        <div class="card cncMachine">
+            <h2><b>Machine 1 - Cam 1</b></h2>
+            <img id="ESP32-1" src="" />
+            <div class="timestamp" id="timestamp-1"></div>
+            <div class="buttons">
+                <button onclick="flipImageHorizontal('ESP32-1')">Flip Horizontal</button>
+                <button onclick="flipImageVertical('ESP32-1')">Flip Vertical</button>
+                <button id="recordBtn1" onclick="toggleRecording('ESP32-1', 'recordBtn1')" class="record-btn">Start Recording</button>
+            </div>
+        </div>
+        <div class="card cncMachine">
+            <h2><b>Machine 1 - Cam 2</b></h2>
+            <img id="ESP32-2" src="" />
+            <div class="timestamp" id="timestamp-2"></div>
+            <div class="buttons">
+                <button onclick="flipImageHorizontal('ESP32-2')">Flip Horizontal</button>
+                <button onclick="flipImageVertical('ESP32-2')">Flip Vertical</button>
+                <button id="recordBtn2" onclick="toggleRecording('ESP32-2', 'recordBtn2')" class="record-btn">Start Recording</button>
+            </div>
+        </div>
+        
+        <div class="card cncMachine">
+            <h2><b>Machine 1 - Cam 3</b></h2>
+            <img id="ESP32-3" src="" />
+            <div class="timestamp" id="timestamp-3"></div>
+            <div class="buttons">
+                <button onclick="flipImageHorizontal('ESP32-3')">Flip Horizontal</button>
+                <button onclick="flipImageVertical('ESP32-3')">Flip Vertical</button>
+            </div>
+        </div>
+
+        <div class="card millingMachine">
+            <h2><b>Cam 4</b></h2>
+            <img id="ESP32-4" src="" />
+            <div class="timestamp" id="timestamp-4"></div>
+            <div class="buttons">
+                <button onclick="flipImageHorizontal('ESP32-4')">Flip Horizontal</button>
+                <button onclick="flipImageVertical('ESP32-4')">Flip Vertical</button>
+            </div>
+        </div>
+        <div class="card millingMachine">
+            <h2><b>Cam 6</b></h2>
+            <img id="ESP32-6" src="" />
+            <div class="timestamp" id="timestamp-6"></div>
+            <div class="buttons">
+                <button onclick="flipImageHorizontal('ESP32-6')">Flip Horizontal</button>
+                <button onclick="flipImageVertical('ESP32-6')">Flip Vertical</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize camera elements
+        const img_1 = document.getElementById("ESP32-1");
+        const img_2 = document.getElementById("ESP32-2");
+        const img_3 = document.getElementById("ESP32-3");
+        const img_4 = document.getElementById("ESP32-4");
+        var imageFrame;
+
+        // WebSocket setup
+        const WS_URL = 'ws://192.168.0.102:8888';
+        const ws = new WebSocket(WS_URL);
+        let urlObject;
+
+        // Recording related variables
+        let mediaRecorders = {};
+        let recordedChunks = {};
+
+        // WebSocket connection
+        ws.onopen = () => {
+            console.log(`Connected to ${WS_URL}`);
+            ws.send("WEB_CLIENT");
+        };
+
+        ws.onmessage = async (message) => {
+            const arrayBuffer = message.data;
+            if (urlObject) {
+                URL.revokeObjectURL(urlObject);
+            }
+            var blobObj = new Blob([arrayBuffer]);
+            const buf = await blobObj.arrayBuffer();
+            var uint8 = new Uint8Array(buf.slice(12, 13));
+            var currentCam = uint8[0];
+            console.log("current Cam: ", currentCam);
+
+            switch (currentCam) {
+                case 1: imageFrame = img_1; break;
+                case 2: imageFrame = img_2; break;
+                case 3: imageFrame = img_3; break;
+                case 4: imageFrame = img_4; break;
+                default: return;
+            }
+
+            urlObject = URL.createObjectURL(blobObj);
+            imageFrame.src = urlObject;
+        };
+
+        // Recording functionality
+        function toggleRecording(cameraId, buttonId) {
+            const button = document.getElementById(buttonId);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = document.getElementById(cameraId);
+            
+            if (!mediaRecorders[cameraId]) {
+                // Start recording
+                button.textContent = 'Stop Recording';
+                button.style.backgroundColor = 'red';
+                
+                // Set canvas size to match image
+                canvas.width = img.width || 640;
+                canvas.height = img.height || 480;
+                
+                // Create a media stream from the canvas
+                const stream = canvas.captureStream(30); // 30 FPS
+                mediaRecorders[cameraId] = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9'
+                });
+                
+                recordedChunks[cameraId] = [];
+                
+                mediaRecorders[cameraId].ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks[cameraId].push(event.data);
+                    }
+                };
+                
+                mediaRecorders[cameraId].onstop = () => {
+                    const blob = new Blob(recordedChunks[cameraId], {
+                        type: 'video/webm'
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${cameraId}-recording-${new Date().toISOString()}.webm`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    recordedChunks[cameraId] = [];
+                };
+                
+                // Start recording
+                mediaRecorders[cameraId].start(1000); // Capture every second
+                
+                // Start the frame capture loop
+                function captureFrame() {
+                    if (mediaRecorders[cameraId]) {
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        requestAnimationFrame(captureFrame);
+                    }
+                }
+                captureFrame();
+                
+            } else {
+                // Stop recording
+                mediaRecorders[cameraId].stop();
+                mediaRecorders[cameraId] = null;
+                button.textContent = 'Start Recording';
+                button.style.backgroundColor = '#4CAF50';
+            }
+        }
+
+        // Image flip functions
+        function flipImageHorizontal(cameraId) {
+            const img = document.getElementById(cameraId);
+            if (img.classList.contains("flipped-horizontal") && img.classList.contains("flipped-vertical")) {
+                img.classList.remove("flipped-both");
+                img.classList.remove("flipped-horizontal");
+                img.classList.add("flipped-vertical");
+            } else if (img.classList.contains("flipped-vertical")) {
+                img.classList.add("flipped-both");
+                img.classList.remove("flipped-vertical");
+            } else {
+                img.classList.toggle("flipped-horizontal");
+            }
+        }
+
+        function flipImageVertical(cameraId) {
+            const img = document.getElementById(cameraId);
+            if (img.classList.contains("flipped-horizontal") && img.classList.contains("flipped-vertical")) {
+                img.classList.remove("flipped-both");
+                img.classList.remove("flipped-vertical");
+                img.classList.add("flipped-horizontal");
+            } else if (img.classList.contains("flipped-horizontal")) {
+                img.classList.add("flipped-both");
+                img.classList.remove("flipped-horizontal");
+            } else {
+                img.classList.toggle("flipped-vertical");
+            }
+        }
+
+        // Cluster display function
+        function showCluster(cluster) {
+            const cardsContainer = document.getElementById('camera-container');
+            cardsContainer.style.display = 'grid';
+
+            const allCards = document.querySelectorAll('.card');
+            allCards.forEach(card => {
+                if (card.classList.contains(cluster)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+    
+        // Timestamp update function
+        function updateTimestamps() {
+            const timestamps = ['timestamp-1', 'timestamp-2', 'timestamp-3', 'timestamp-4', 'timestamp-6'];
+            const currentTime = new Date().toLocaleString();
+            
+            timestamps.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.innerText = currentTime;
+                }
+            });
+        }
+
+        setInterval(updateTimestamps, 1000); // Update timestamps every second
+    </script>
+</body>
+</html>
