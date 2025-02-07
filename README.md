@@ -1,6 +1,13 @@
 # CameraMonitoring
 Camera Monitoring System using ESP32-CAM
 
+Features:
+- Customised Webpage 
+- Live Streaming of Multiple Cameras (ESP32-CAM)
+- Recording Function
+
+  Updated: 7 Feb 2025
+
 ############################################
 
 Installing Packages
